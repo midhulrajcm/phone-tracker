@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Phone Tracker - History</title>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet"
+          href="/static/leaflet.css">
+
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+
+        #historyList {
+            padding: 0;
+        }
+
+        #historyList li {
+            list-style: none;
+            padding: 10px;
+            margin: 5px 0;
+            background: #eeeeee;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        #historyList li:hover {
+            background: #dddddd;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>📍 My Phone Tracker</h1>
+
+<p id="status">Loading location history...</p>
+
+<div id="map"></div>
+
+<h2>Location History</h2>
+
+<ul id="historyList"></ul>
+
+
+<script src="/static/leaflet.js"></script>
+
+<script>
+
+let map = L.map('map').setView([10.0, 76.3], 10);
+
+
+L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+        attribution: '&copy; OpenStreetMap contributors'
+    }
+).addTo(map);
+
+
+let marker;
+let routeLine;
+let routePoints = [];
+
+
+// Draw location on map
+function drawPoint(point) {
+
+    routePoints.push(point);
+
+    if (marker) {
+
+        marker.setLatLng(point);
+
+    } else {
+
+        marker = L.marker(point)
+            .addTo(map)
+            .bindPopup("📍 My Phone");
+
+    }
+
+
+    if (routeLine) {
+
+        routeLine.setLatLngs(routePoints);
+
+    } else {
+
+        routeLine = L.polyline(routePoints)
+            .addTo(map);
+
+    }
+}
+
+
+
+// Load old locations from database
+async function loadHistory() {
+
+    try {
+
+        const response = await fetch("/history");
+
+        const history = await response.json();
+
+
+        const historyList =
+            document.getElementById("historyList");
+
+
+        history.forEach(function(item) {
+
+            const point = [
+                item.latitude,
+                item.longitude
+            ];
+
+
+            routePoints.push(point);
+
+
+            // Create history list item
+            const li =
+                document.createElement("li");
+
+
+            li.innerText =
+                item.time +
+                " | " +
+                item.latitude +
+                ", " +
+                item.longitude;
+
+
+            // Click history item
+            li.onclick = function() {
+
+                map.setView(
+                    point,
+                    18
+                );
+
+                marker = L.marker(point)
+                    .addTo(map)
+                    .bindPopup("📍 Saved Location")
+                    .openPopup();
+
+            };
+
+
+            historyList.appendChild(li);
+
+        });
+
+
+        // Draw old route
+        if (routePoints.length > 0) {
+
+            marker = L.marker(
+                routePoints[routePoints.length - 1]
+            )
+            .addTo(map)
+            .bindPopup("📍 Last saved location");
+
+
+            routeLine =
+                L.polyline(routePoints)
+                .addTo(map);
+
+
+            map.fitBounds(
+                routeLine.getBounds(),
+                {
+                    padding: [20, 20]
+                }
+            );
+
+
+            document.getElementById("status")
+                .innerText =
+                "🟡 History loaded — live tracking starting...";
+
+        } else {
+
+            document.getElementById("status")
+                .innerText =
+                "No history yet — starting live tracking...";
+
+        }
+
+    } catch (error) {
+
+        document.getElementById("status")
+            .innerText =
+            "❌ Could not load history";
+
+    }
+
+}
+
+
+
+// New GPS location
+function updateLocation(position) {
+
+    const latitude =
+        position.coords.latitude;
+
+
+    const longitude =
+        position.coords.longitude;
+
+
+    const currentPoint = [
+        latitude,
+        longitude
+    ];
+
+
+    drawPoint(currentPoint);
+
+
+    map.setView(
+        currentPoint,
+        16
+    );
+
+
+    fetch("/location", {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+
+            latitude: latitude,
+
+            longitude: longitude
+
+        })
+
+    });
+
+
+    document.getElementById("status")
+        .innerText =
+        "🟢 Live tracking active";
+
+}
+
+
+
+// GPS error
+function showError(error) {
+
+    document.getElementById("status")
+        .innerText =
+        "❌ Location error: " +
+        error.message;
+
+}
+
+
+
+// Load database history first
+loadHistory();
+
+
+
+// Start live GPS tracking
+if (navigator.geolocation) {
+
+    navigator.geolocation.watchPosition(
+
+        updateLocation,
+
+        showError,
+
+        {
+            enableHighAccuracy: true,
+            maximumAge: 5000,
+            timeout: 10000
+        }
+
+    );
+
+} else {
+
+    document.getElementById("status")
+        .innerText =
+        "❌ GPS not supported";
+
+}
+
+</script>
+
+</body>
+</html>
