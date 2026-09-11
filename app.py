@@ -4,6 +4,12 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+API_KEY = "my-secret-key-123"
+
+
+def check_api_key():
+    return request.headers.get("X-API-Key") == API_KEY
+
 
 def init_db():
     conn = sqlite3.connect("tracker.db")
@@ -29,6 +35,9 @@ def home():
 
 @app.route("/location", methods=["POST"])
 def location():
+    if not check_api_key():
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json()
 
     latitude = data.get("latitude")
@@ -53,6 +62,9 @@ def location():
 
 @app.route("/history")
 def history():
+    if not check_api_key():
+        return jsonify({"error": "Unauthorized"}), 401
+
     conn = sqlite3.connect("tracker.db")
     cursor = conn.cursor()
 
@@ -77,6 +89,7 @@ def history():
 
 
 init_db()
+
 
 if __name__ == "__main__":
     app.run(
